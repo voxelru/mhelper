@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block content %}
+  {% set f = edit_form %}
+  {% set ns = namespace(cur=task.group_id) %}
+  {% if f is not none %}
+    {% if f.group_id %}{% set ns.cur = f.group_id | int %}
+    {% else %}{% set ns.cur = none %}{% endif %}
+  {% endif %}
+  <div class="mb-3">
+    <div class="h4 mb-1">Редактирование задачи #{{ task.id }}</div>
+    <div class="text-secondary small">
+      <a href="{{ url_for('task_detail', task_id=task.id) }}">← к задаче</a>
+      <span class="text-secondary"> · </span>
+      <a href="{{ url_for('tasks_list') }}">все задачи</a>
+    </div>
+  </div>
+
+  {% if error %}
+    <div class="alert alert-danger">{{ error }}</div>
+  {% endif %}
+
+  <form class="card shadow-sm" method="post" action="{{ url_for('task_edit', task_id=task.id) }}">
+    <div class="card-body row g-3">
+      <div class="col-12 col-md-6">
+        <label class="form-label">Название</label>
+        <input class="form-control" name="title" required value="{{ (f.title if f else task.title) | e }}" />
+      </div>
+      <div class="col-12 col-md-6">
+        <label class="form-label">Статус</label>
+        <select class="form-select" name="status">
+          {% set st = f.status if f else task.status %}
+          <option value="planned" {% if st == 'planned' %}selected{% endif %}>Планируется</option>
+          <option value="in_progress" {% if st == 'in_progress' %}selected{% endif %}>В работе</option>
+          <option value="done" {% if st == 'done' %}selected{% endif %}>Завершено</option>
+        </select>
+      </div>
+      <div class="col-12 col-md-6">
+        <label class="form-label">Приоритет</label>
+        {% set pr = (f.priority | int) if f and f.priority else task.priority %}
+        <select class="form-select" name="priority">
+          <option value="0" {% if pr == 0 %}selected{% endif %}>0 — высокий (красный)</option>
+          <option value="1" {% if pr == 1 %}selected{% endif %}>1 — оранжевый</option>
+          <option value="2" {% if pr == 2 %}selected{% endif %}>2 — жёлтый</option>
+          <option value="3" {% if pr == 3 %}selected{% endif %}>3 — зелёный</option>
+          <option value="4" {% if pr == 4 %}selected{% endif %}>4 — без цвета</option>
+        </select>
+      </div>
+      <div class="col-12">
+        <label class="form-label">Ссылка</label>
+        <input class="form-control" name="link" value="{{ (f.link if f else (task.link or '')) | e }}" />
+      </div>
+      <div class="col-12 col-md-6">
+        <label class="form-label">Исполнитель</label>
+        <input class="form-control" name="assignee" value="{{ (f.assignee if f else (task.assignee or '')) | e }}" />
+      </div>
+      <div class="col-12 col-md-6">
+        <label class="form-label">Срок</label>
+        <input class="form-control" type="date" name="due_date" value="{{ f.due_date if f else (task.due_date.isoformat() if task.due_date else '') }}" />
+      </div>
+      <div class="col-12 col-md-6">
+        <label class="form-label">Группа</label>
+        <select class="form-select" name="group_id">
+          <option value="" {% if ns.cur is none %}selected{% endif %}>— без группы —</option>
+          {% for g in groups %}
+            <option value="{{ g.id }}" {% if ns.cur == g.id %}selected{% endif %}>{{ g.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-12 d-flex gap-2">
+        <button class="btn btn-primary" type="submit">Сохранить</button>
+        <a class="btn btn-outline-secondary" href="{{ url_for('task_detail', task_id=task.id) }}">Отмена</a>
+      </div>
+    </div>
+  </form>
+{% endblock %}

@@ -24,3 +24,31 @@
   min-width: 0;
 }
 
+.app-container {
+  max-width: 90vw;
+}
+
+.task-priority-0 {
+  border-left: 6px solid #c77777 !important;
+  background-color: #f2dede;
+}
+
+.task-priority-1 {
+  border-left: 6px solid #caa179 !important;
+  background-color: #f6e4d6;
+}
+
+.task-priority-2 {
+  border-left: 6px solid #c9b97a !important;
+  background-color: #f4efd8;
+}
+
+.task-priority-3 {
+  border-left: 6px solid #7faa88 !important;
+  background-color: #e3f0e7;
+}
+
+.task-priority-4 {
+  border-left: 6px solid transparent !important;
+}
+

@@ -14,10 +14,14 @@
     <nav class="navbar navbar-expand-lg bg-white border-bottom">
       <div class="container-fluid">
         <a class="navbar-brand fw-semibold" href="{{ url_for('board') }}">mhelper</a>
+        <div class="navbar-nav flex-row gap-2">
+          <a class="nav-link" href="{{ url_for('board') }}">Доска</a>
+          <a class="nav-link" href="{{ url_for('tasks_list') }}">Все задачи</a>
+        </div>
       </div>
     </nav>
 
-    <main class="container py-4">
+    <main class="container app-container py-4">
       {% block content %}{% endblock %}
     </main>
 

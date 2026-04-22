@@ -35,29 +35,40 @@
         </div>
       </div>
       <div class="card-body">
-        <form class="row g-2 mb-3" method="post" action="{{ url_for('create_task', group_id=selected_group_id) }}">
-          <div class="col-12 col-lg-4">
-            <input class="form-control" name="title" placeholder="Название задачи" required />
-          </div>
-          <div class="col-12 col-lg-3">
-            <input class="form-control" name="link" placeholder="Ссылка (опц.)" />
-          </div>
-          <div class="col-12 col-lg-2">
-            <input class="form-control" name="assignee" placeholder="Исполнитель (опц.)" />
-          </div>
-          <div class="col-6 col-lg-2">
-            <input class="form-control" type="date" name="due_date" />
-          </div>
-          <div class="col-6 col-lg-1">
-            <select class="form-select" name="group_id" title="Группа">
-              <option value="">—</option>
-              {% for g in groups %}
-                <option value="{{ g.id }}">{{ g.name }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div class="col-12">
-            <button class="btn btn-primary" type="submit">Добавить задачу</button>
+        <form method="post" action="{{ url_for('create_task') }}{% if selected_group_id is not none %}?group_id={{ selected_group_id }}{% endif %}" class="mb-3">
+          <div class="d-flex flex-nowrap gap-2 align-items-end overflow-auto">
+            <div style="min-width: 260px;">
+              <input class="form-control" name="title" placeholder="Название задачи" required />
+            </div>
+            <div style="min-width: 220px;">
+              <input class="form-control" name="link" placeholder="Ссылка (опц.)" />
+            </div>
+            <div style="min-width: 200px;">
+              <input class="form-control" name="assignee" placeholder="Исполнитель (опц.)" />
+            </div>
+            <div style="min-width: 160px;">
+              <input class="form-control" type="date" name="due_date" />
+            </div>
+            <div style="min-width: 200px;">
+              <select class="form-select" name="group_id" title="Группа">
+                <option value="">— группа —</option>
+                {% for g in groups %}
+                  <option value="{{ g.id }}">{{ g.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div style="min-width: 110px;">
+              <select class="form-select" name="priority" title="Приоритет">
+                <option value="4" selected>Pr4</option>
+                <option value="3">Pr3</option>
+                <option value="2">Pr2</option>
+                <option value="1">Pr1</option>
+                <option value="0">Pr0</option>
+              </select>
+            </div>
+            <div style="min-width: 170px;">
+              <button class="btn btn-primary w-100" type="submit">Добавить</button>
+            </div>
           </div>
         </form>
 
