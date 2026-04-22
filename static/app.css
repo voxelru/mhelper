@@ -1,0 +1,26 @@
+.board-vertical {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+.task-list {
+  min-height: 40px;
+}
+
+.task-card {
+  cursor: grab;
+}
+
+.task-card:active {
+  cursor: grabbing;
+}
+
+.task-ghost {
+  opacity: 0.6;
+}
+
+.min-w-0 {
+  min-width: 0;
+}
+

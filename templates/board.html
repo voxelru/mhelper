@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <div class="d-flex flex-wrap align-items-end gap-3 mb-4">
+    <form class="d-flex align-items-end gap-2" method="get" action="{{ url_for('board') }}">
+      <div>
+        <label class="form-label mb-1">Группа</label>
+        <select class="form-select" name="group_id" onchange="this.form.submit()">
+          <option value="" {% if selected_group_id is none %}selected{% endif %}>Все</option>
+          {% for g in groups %}
+            <option value="{{ g.id }}" {% if selected_group_id == g.id %}selected{% endif %}>{{ g.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% if selected_group_id is not none %}
+        <a class="btn btn-outline-secondary" href="{{ url_for('board') }}">Сбросить</a>
+      {% endif %}
+    </form>
+
+    <form class="d-flex align-items-end gap-2 ms-auto" method="post" action="{{ url_for('create_group') }}">
+      <div>
+        <label class="form-label mb-1">Новая группа</label>
+        <input class="form-control" name="name" placeholder="Напр. Маркетинг" />
+      </div>
+      <button class="btn btn-outline-primary" type="submit">Добавить</button>
+    </form>
+  </div>
+
+  <div class="board-vertical">
+    <section class="board-section card shadow-sm">
+      <div class="card-header bg-white">
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+          <div class="fw-semibold">Планируется</div>
+          <div class="text-secondary small">Создавайте задачи здесь</div>
+        </div>
+      </div>
+      <div class="card-body">
+        <form class="row g-2 mb-3" method="post" action="{{ url_for('create_task', group_id=selected_group_id) }}">
+          <div class="col-12 col-lg-4">
+            <input class="form-control" name="title" placeholder="Название задачи" required />
+          </div>
+          <div class="col-12 col-lg-3">
+            <input class="form-control" name="link" placeholder="Ссылка (опц.)" />
+          </div>
+          <div class="col-12 col-lg-2">
+            <input class="form-control" name="assignee" placeholder="Исполнитель (опц.)" />
+          </div>
+          <div class="col-6 col-lg-2">
+            <input class="form-control" type="date" name="due_date" />
+          </div>
+          <div class="col-6 col-lg-1">
+            <select class="form-select" name="group_id" title="Группа">
+              <option value="">—</option>
+              {% for g in groups %}
+                <option value="{{ g.id }}">{{ g.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-12">
+            <button class="btn btn-primary" type="submit">Добавить задачу</button>
+          </div>
+        </form>
+
+        <div class="task-list" data-status="planned">
+          {% for t in planned %}
+            {% include "partials/task_card.html" %}
+          {% else %}
+            <div class="text-secondary small">Пока нет задач.</div>
+          {% endfor %}
+        </div>
+      </div>
+    </section>
+
+    <section class="board-section card shadow-sm">
+      <div class="card-header bg-white">
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+          <div class="fw-semibold">В работе</div>
+          <div class="text-secondary small">Перетащите сюда из “Планируется”</div>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="task-list" data-status="in_progress">
+          {% for t in in_progress %}
+            {% include "partials/task_card.html" %}
+          {% else %}
+            <div class="text-secondary small">Пусто.</div>
+          {% endfor %}
+        </div>
+      </div>
+    </section>
+
+    <section class="board-section card shadow-sm">
+      <div class="card-header bg-white">
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+          <div class="fw-semibold">Завершено</div>
+          <div class="text-secondary small">Сюда — выполненные задачи</div>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="task-list" data-status="done">
+          {% for t in done %}
+            {% include "partials/task_card.html" %}
+          {% else %}
+            <div class="text-secondary small">Пока ничего не завершено.</div>
+          {% endfor %}
+        </div>
+      </div>
+    </section>
+  </div>
+{% endblock %}

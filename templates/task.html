@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <div class="d-flex align-items-center justify-content-between gap-3 mb-3">
+    <div>
+      <div class="h4 mb-1">{{ task.title }}</div>
+      <div class="text-secondary small">
+        <a href="{{ url_for('board') }}">← к доске</a>
+      </div>
+    </div>
+    <span class="badge text-bg-light border">{{ task.status }}</span>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-12 col-lg-5">
+      <div class="card shadow-sm">
+        <div class="card-header bg-white fw-semibold">Поля</div>
+        <div class="card-body">
+          <dl class="row mb-0">
+            <dt class="col-5 text-secondary">Группа</dt>
+            <dd class="col-7">{{ task.group.name if task.group else "—" }}</dd>
+
+            <dt class="col-5 text-secondary">Исполнитель</dt>
+            <dd class="col-7">{{ task.assignee or "—" }}</dd>
+
+            <dt class="col-5 text-secondary">Срок</dt>
+            <dd class="col-7">{{ task.due_date.isoformat() if task.due_date else "—" }}</dd>
+
+            <dt class="col-5 text-secondary">Ссылка</dt>
+            <dd class="col-7">
+              {% if task.link %}
+                <a href="{{ task.link }}" target="_blank" rel="noopener noreferrer">{{ task.link }}</a>
+              {% else %}
+                —
+              {% endif %}
+            </dd>
+          </dl>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-lg-7">
+      <div class="card shadow-sm">
+        <div class="card-header bg-white fw-semibold">Комментарии</div>
+        <div class="card-body">
+          <form method="post" action="{{ url_for('add_comment', task_id=task.id) }}" class="mb-3">
+            <textarea class="form-control" name="body" rows="3" placeholder="Комментарий..." required></textarea>
+            <div class="d-flex justify-content-end mt-2">
+              <button class="btn btn-primary" type="submit">Добавить</button>
+            </div>
+          </form>
+
+          {% for c in task.comments %}
+            <div class="border rounded p-2 mb-2 bg-white">
+              <div class="small text-secondary mb-1">{{ c.created_at.strftime("%Y-%m-%d %H:%M") }}</div>
+              <div style="white-space: pre-wrap;">{{ c.body }}</div>
+            </div>
+          {% else %}
+            <div class="text-secondary small">Пока нет комментариев.</div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}
