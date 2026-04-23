@@ -50,6 +50,10 @@
         <label class="form-label">Ссылка</label>
         <input class="form-control" name="link" value="{{ (f.link if f else (task.link or '')) | e }}" />
       </div>
+      <div class="col-12">
+        <label class="form-label">Описание</label>
+        <textarea class="form-control" name="description" rows="5" placeholder="Описание задачи...">{{ (f.description if f else (task.description or '')) | e }}</textarea>
+      </div>
       <div class="col-12 col-md-6">
         <label class="form-label">Исполнитель</label>
         <input class="form-control" name="assignee" value="{{ (f.assignee if f else (task.assignee or '')) | e }}" />
@@ -73,4 +77,33 @@
       </div>
     </div>
   </form>
+
+  <div class="card shadow-sm mt-3">
+    <div class="card-header bg-white fw-semibold">Комментарии</div>
+    <div class="card-body">
+      {% for c in task.comments %}
+        <div class="border rounded p-2 mb-2 bg-white">
+          <div class="d-flex justify-content-between align-items-start gap-3 mb-1">
+            <div class="small text-secondary">{{ c.created_at.strftime("%Y-%m-%d %H:%M") }}</div>
+            <form method="post" action="{{ url_for('update_comment', task_id=task.id, comment_id=c.id) }}">
+              <label class="form-check form-check-inline mb-0 small">
+                <input
+                  class="form-check-input"
+                  type="checkbox"
+                  name="resolved"
+                  value="1"
+                  {% if c.resolved %}checked{% endif %}
+                  onchange="this.form.submit()"
+                />
+                <span class="form-check-label">решено</span>
+              </label>
+            </form>
+          </div>
+          <div style="white-space: pre-wrap;{% if c.resolved %} text-decoration: line-through; opacity: 0.7;{% endif %}">{{ c.body }}</div>
+        </div>
+      {% else %}
+        <div class="text-secondary small">Пока нет комментариев.</div>
+      {% endfor %}
+    </div>
+  </div>
 {% endblock %}

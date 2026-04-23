@@ -28,6 +28,7 @@ class Task(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(240), nullable=False)
+    description = db.Column(db.Text, nullable=True)
     link = db.Column(db.String(2000), nullable=True)
     assignee = db.Column(db.String(120), nullable=True)
     due_date = db.Column(db.Date, nullable=True)
@@ -57,6 +58,7 @@ class Comment(db.Model):
     task_id = db.Column(db.Integer, db.ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False, index=True)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     body = db.Column(db.Text, nullable=False)
+    resolved = db.Column(db.Boolean, nullable=False, default=False)
 
     task = db.relationship("Task", back_populates="comments")
 
@@ -77,6 +79,7 @@ def _parse_task_form(form: Any) -> tuple[str | None, dict[str, Any]]:
     if not title:
         return "Укажите название задачи.", {}
 
+    description = (form.get("description") or "").strip() or None
     link = (form.get("link") or "").strip() or None
     assignee = (form.get("assignee") or "").strip() or None
     group_id = form.get("group_id", type=int)
@@ -98,6 +101,7 @@ def _parse_task_form(form: Any) -> tuple[str | None, dict[str, Any]]:
 
     return None, {
         "title": title,
+        "description": description,
         "link": link,
         "assignee": assignee,
         "due_date": due,
@@ -120,6 +124,13 @@ def create_app() -> Flask:
             col_names = {row[1] for row in cols}
             if "priority" not in col_names:
                 conn.execute(text("ALTER TABLE tasks ADD COLUMN priority INTEGER NOT NULL DEFAULT 4"))
+            if "description" not in col_names:
+                conn.execute(text("ALTER TABLE tasks ADD COLUMN description TEXT"))
+
+            comment_cols = conn.execute(text("PRAGMA table_info(comments)")).fetchall()
+            comment_col_names = {row[1] for row in comment_cols}
+            if "resolved" not in comment_col_names:
+                conn.execute(text("ALTER TABLE comments ADD COLUMN resolved INTEGER NOT NULL DEFAULT 0"))
 
     @app.get("/")
     def board():
@@ -335,6 +346,7 @@ def create_app() -> Flask:
                 fields["status"] = task.status
 
             task.title = fields["title"]
+            task.description = fields["description"]
             task.link = fields["link"]
             task.assignee = fields["assignee"]
             task.due_date = fields["due_date"]
@@ -356,6 +368,15 @@ def create_app() -> Flask:
             db.session.add(Comment(task_id=task.id, body=body))
             db.session.commit()
         return redirect(url_for("task_detail", task_id=task.id))
+
+    @app.post("/tasks/<int:task_id>/comments/<int:comment_id>")
+    def update_comment(task_id: int, comment_id: int):
+        comment = Comment.query.filter_by(id=comment_id, task_id=task_id).first()
+        if comment is None:
+            abort(404)
+        comment.resolved = bool(request.form.get("resolved"))
+        db.session.commit()
+        return redirect(url_for("task_detail", task_id=task_id))
 
     @app.post("/api/tasks/<int:task_id>/move")
     def api_move_task(task_id: int):
