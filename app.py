@@ -11,7 +11,7 @@ from sqlalchemy.orm import joinedload
 
 db = SQLAlchemy()
 
-TaskStatus = Literal["planned", "in_progress", "done"]
+TaskStatus = Literal["planned", "in_progress", "done", "archived"]
 
 
 class Group(db.Model):
@@ -46,7 +46,7 @@ class Task(db.Model):
     )
 
     __table_args__ = (
-        CheckConstraint("status IN ('planned','in_progress','done')", name="ck_tasks_status"),
+        CheckConstraint("status IN ('planned','in_progress','done','archived')", name="ck_tasks_status"),
         CheckConstraint("priority IN (0,1,2,3,4)", name="ck_tasks_priority"),
     )
 
@@ -87,7 +87,7 @@ def _parse_task_form(form: Any) -> tuple[str | None, dict[str, Any]]:
         group_id = None
 
     status = (form.get("status") or "").strip()
-    if status not in ("planned", "in_progress", "done"):
+    if status not in ("planned", "in_progress", "done", "archived"):
         status = None
 
     due = _parse_optional_date(form.get("due_date"))
@@ -127,6 +127,47 @@ def create_app() -> Flask:
             if "description" not in col_names:
                 conn.execute(text("ALTER TABLE tasks ADD COLUMN description TEXT"))
 
+            # Expand tasks.status CHECK constraint to include 'archived' (SQLite requires table rebuild).
+            tasks_sql_row = conn.execute(
+                text("SELECT sql FROM sqlite_master WHERE type='table' AND name='tasks'")
+            ).fetchone()
+            tasks_sql = (tasks_sql_row[0] if tasks_sql_row else "") or ""
+            if "ck_tasks_status" in tasks_sql and "archived" not in tasks_sql:
+                conn.execute(text("PRAGMA foreign_keys=OFF"))
+                conn.execute(
+                    text(
+                        """
+CREATE TABLE tasks__new (
+  id INTEGER NOT NULL,
+  title VARCHAR(240) NOT NULL,
+  description TEXT,
+  link VARCHAR(2000),
+  assignee VARCHAR(120),
+  due_date DATE,
+  status VARCHAR(20) NOT NULL DEFAULT 'planned',
+  priority INTEGER NOT NULL DEFAULT 4,
+  group_id INTEGER,
+  PRIMARY KEY (id),
+  CONSTRAINT ck_tasks_status CHECK (status IN ('planned','in_progress','done','archived')),
+  CONSTRAINT ck_tasks_priority CHECK (priority IN (0,1,2,3,4)),
+  FOREIGN KEY(group_id) REFERENCES groups (id) ON DELETE SET NULL
+)
+"""
+                    )
+                )
+                conn.execute(
+                    text(
+                        """
+INSERT INTO tasks__new (id, title, description, link, assignee, due_date, status, priority, group_id)
+SELECT id, title, description, link, assignee, due_date, status, priority, group_id
+FROM tasks
+"""
+                    )
+                )
+                conn.execute(text("DROP TABLE tasks"))
+                conn.execute(text("ALTER TABLE tasks__new RENAME TO tasks"))
+                conn.execute(text("PRAGMA foreign_keys=ON"))
+
             comment_cols = conn.execute(text("PRAGMA table_info(comments)")).fetchall()
             comment_col_names = {row[1] for row in comment_cols}
             if "resolved" not in comment_col_names:
@@ -137,7 +178,10 @@ def create_app() -> Flask:
         group_id = request.args.get("group_id", type=int)
         groups = Group.query.order_by(Group.name.asc()).all()
 
-        base_query = Task.query.order_by(Task.due_date.is_(None), Task.due_date.asc(), Task.id.desc())
+        base_query = (
+            Task.query.filter(Task.status != "archived")
+            .order_by(Task.due_date.is_(None), Task.due_date.asc(), Task.id.desc())
+        )
         if group_id is not None:
             base_query = base_query.filter(Task.group_id == group_id)
 
@@ -190,9 +234,30 @@ def create_app() -> Flask:
     @app.get("/tasks")
     def tasks_list():
         q = (request.args.get("q") or "").strip()
-        status_f = (request.args.get("status") or "").strip()
-        priority_f = request.args.get("priority", type=int)
-        group_id_f = request.args.get("group_id", type=int)
+        status_fs = [s.strip() for s in request.args.getlist("status") if (s or "").strip()]
+        status_fs = [s for s in status_fs if s in ("planned", "in_progress", "done", "archived")]
+
+        priority_fs_raw = request.args.getlist("priority")
+        priority_fs: list[int] = []
+        for p in priority_fs_raw:
+            try:
+                pi = int(str(p).strip())
+            except (TypeError, ValueError):
+                continue
+            if pi in (0, 1, 2, 3, 4):
+                priority_fs.append(pi)
+        priority_fs = sorted(set(priority_fs))
+
+        group_id_fs_raw = request.args.getlist("group_id")
+        group_id_fs: list[int] = []
+        for g in group_id_fs_raw:
+            try:
+                gi = int(str(g).strip())
+            except (TypeError, ValueError):
+                continue
+            if gi > 0:
+                group_id_fs.append(gi)
+        group_id_fs = sorted(set(group_id_fs))
         assignee_f = (request.args.get("assignee") or "").strip()
         due_from = _parse_optional_date(request.args.get("due_from"))
         due_to = _parse_optional_date(request.args.get("due_to"))
@@ -237,12 +302,12 @@ def create_app() -> Flask:
 
         if q:
             query = query.filter(Task.title.ilike(f"%{q}%"))
-        if status_f in ("planned", "in_progress", "done"):
-            query = query.filter(Task.status == status_f)
-        if priority_f in (0, 1, 2, 3, 4):
-            query = query.filter(Task.priority == priority_f)
-        if group_id_f is not None:
-            query = query.filter(Task.group_id == group_id_f)
+        if status_fs:
+            query = query.filter(Task.status.in_(status_fs))
+        if priority_fs:
+            query = query.filter(Task.priority.in_(priority_fs))
+        if group_id_fs:
+            query = query.filter(Task.group_id.in_(group_id_fs))
         if assignee_f:
             query = query.filter(Task.assignee.ilike(f"%{assignee_f}%"))
         if due_from is not None:
@@ -281,12 +346,12 @@ def create_app() -> Flask:
         filter_args: dict[str, Any] = {}
         if q:
             filter_args["q"] = q
-        if status_f:
-            filter_args["status"] = status_f
-        if priority_f in (0, 1, 2, 3, 4):
-            filter_args["priority"] = priority_f
-        if group_id_f is not None:
-            filter_args["group_id"] = group_id_f
+        if status_fs:
+            filter_args["status"] = status_fs
+        if priority_fs:
+            filter_args["priority"] = priority_fs
+        if group_id_fs:
+            filter_args["group_id"] = group_id_fs
         if assignee_f:
             filter_args["assignee"] = assignee_f
         if request.args.get("due_from"):
@@ -305,9 +370,9 @@ def create_app() -> Flask:
             groups=groups,
             filters={
                 "q": q,
-                "status": status_f,
-                "priority": priority_f,
-                "group_id": group_id_f,
+                "status": status_fs,
+                "priority": priority_fs,
+                "group_id": group_id_fs,
                 "assignee": assignee_f,
                 "due_from": request.args.get("due_from") or "",
                 "due_to": request.args.get("due_to") or "",
@@ -374,7 +439,15 @@ def create_app() -> Flask:
         comment = Comment.query.filter_by(id=comment_id, task_id=task_id).first()
         if comment is None:
             abort(404)
-        comment.resolved = bool(request.form.get("resolved"))
+
+        # Update only fields present in the form to avoid unintended overwrites
+        if "resolved_present" in request.form:
+            resolved_values = request.form.getlist("resolved")
+            comment.resolved = "1" in resolved_values
+        if "body" in request.form:
+            body = (request.form.get("body") or "").strip()
+            if body:
+                comment.body = body
         db.session.commit()
         return redirect(url_for("task_detail", task_id=task_id))
 

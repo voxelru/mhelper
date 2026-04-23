@@ -52,3 +52,21 @@
   border-left: 6px solid transparent !important;
 }
 
+/* multi-filter dropdowns on tasks list (details/summary) */
+details.multi-filter > summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+details.multi-filter > summary::-webkit-details-marker {
+  display: none;
+}
+
+details.multi-filter > .dropdown-menu {
+  display: none;
+}
+
+details.multi-filter[open] > .dropdown-menu {
+  display: block;
+}
+

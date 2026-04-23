@@ -40,7 +40,36 @@ function initDragDrop() {
   }
 }
 
+function initMultiFilterDropdowns() {
+  const dropdowns = Array.from(document.querySelectorAll("details[data-multi-filter]"));
+  if (dropdowns.length === 0) return;
+
+  const sync = (details) => {
+    const summary = details.querySelector("summary");
+    const label = details.dataset.label || "";
+    const checks = Array.from(details.querySelectorAll("input[type=checkbox]"));
+    const selected = checks.filter((c) => c.checked);
+
+    let text = "Все";
+    if (selected.length > 0) {
+      const names = selected
+        .map((c) => c.closest("label")?.querySelector(".form-check-label")?.textContent?.trim())
+        .filter(Boolean);
+      if (names.length <= 2) text = names.join(", ");
+      else text = `${names.slice(0, 2).join(", ")} +${names.length - 2}`;
+    }
+
+    summary.textContent = label ? `${label}: ${text}` : text;
+  };
+
+  for (const d of dropdowns) {
+    sync(d);
+    d.addEventListener("change", () => sync(d));
+  }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   initDragDrop();
+  initMultiFilterDropdowns();
 });
 

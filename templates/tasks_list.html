@@ -4,7 +4,8 @@
   {% set st_ru = {
     'planned': 'Планируется',
     'in_progress': 'В работе',
-    'done': 'Завершено'
+    'done': 'Завершено',
+    'archived': 'Архив'
   } %}
 
   <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
@@ -23,32 +24,69 @@
         </div>
         <div style="min-width: 170px;">
           <label class="form-label mb-0 small text-secondary">Статус</label>
-          <select class="form-select" name="status">
-            <option value="" {% if not filters.status %}selected{% endif %}>Все</option>
-            <option value="planned" {% if filters.status == 'planned' %}selected{% endif %}>Планируется</option>
-            <option value="in_progress" {% if filters.status == 'in_progress' %}selected{% endif %}>В работе</option>
-            <option value="done" {% if filters.status == 'done' %}selected{% endif %}>Завершено</option>
-          </select>
+          <details class="dropdown w-100 multi-filter" data-multi-filter data-label="Статус">
+            <summary class="form-select">Все</summary>
+            <div class="dropdown-menu p-2 w-100">
+              <label class="form-check">
+                <input class="form-check-input" type="checkbox" name="status" value="planned" {% if 'planned' in filters.status %}checked{% endif %} />
+                <span class="form-check-label">Планируется</span>
+              </label>
+              <label class="form-check">
+                <input class="form-check-input" type="checkbox" name="status" value="in_progress" {% if 'in_progress' in filters.status %}checked{% endif %} />
+                <span class="form-check-label">В работе</span>
+              </label>
+              <label class="form-check">
+                <input class="form-check-input" type="checkbox" name="status" value="done" {% if 'done' in filters.status %}checked{% endif %} />
+                <span class="form-check-label">Завершено</span>
+              </label>
+              <label class="form-check">
+                <input class="form-check-input" type="checkbox" name="status" value="archived" {% if 'archived' in filters.status %}checked{% endif %} />
+                <span class="form-check-label">Архив</span>
+              </label>
+            </div>
+          </details>
         </div>
         <div style="min-width: 140px;">
           <label class="form-label mb-0 small text-secondary">Приоритет</label>
-          <select class="form-select" name="priority">
-            <option value="" {% if filters.priority is none %}selected{% endif %}>Все</option>
-            <option value="0" {% if filters.priority == 0 %}selected{% endif %}>Pr0</option>
-            <option value="1" {% if filters.priority == 1 %}selected{% endif %}>Pr1</option>
-            <option value="2" {% if filters.priority == 2 %}selected{% endif %}>Pr2</option>
-            <option value="3" {% if filters.priority == 3 %}selected{% endif %}>Pr3</option>
-            <option value="4" {% if filters.priority == 4 %}selected{% endif %}>Pr4</option>
-          </select>
+          <details class="dropdown w-100 multi-filter" data-multi-filter data-label="Приоритет">
+            <summary class="form-select">Все</summary>
+            <div class="dropdown-menu p-2 w-100">
+              <label class="form-check">
+                <input class="form-check-input" type="checkbox" name="priority" value="0" {% if 0 in filters.priority %}checked{% endif %} />
+                <span class="form-check-label">Pr0</span>
+              </label>
+              <label class="form-check">
+                <input class="form-check-input" type="checkbox" name="priority" value="1" {% if 1 in filters.priority %}checked{% endif %} />
+                <span class="form-check-label">Pr1</span>
+              </label>
+              <label class="form-check">
+                <input class="form-check-input" type="checkbox" name="priority" value="2" {% if 2 in filters.priority %}checked{% endif %} />
+                <span class="form-check-label">Pr2</span>
+              </label>
+              <label class="form-check">
+                <input class="form-check-input" type="checkbox" name="priority" value="3" {% if 3 in filters.priority %}checked{% endif %} />
+                <span class="form-check-label">Pr3</span>
+              </label>
+              <label class="form-check">
+                <input class="form-check-input" type="checkbox" name="priority" value="4" {% if 4 in filters.priority %}checked{% endif %} />
+                <span class="form-check-label">Pr4</span>
+              </label>
+            </div>
+          </details>
         </div>
         <div style="min-width: 200px;">
           <label class="form-label mb-0 small text-secondary">Группа</label>
-          <select class="form-select" name="group_id">
-            <option value="" {% if filters.group_id is none %}selected{% endif %}>Все</option>
-            {% for g in groups %}
-              <option value="{{ g.id }}" {% if filters.group_id == g.id %}selected{% endif %}>{{ g.name }}</option>
-            {% endfor %}
-          </select>
+          <details class="dropdown w-100 multi-filter" data-multi-filter data-label="Группа">
+            <summary class="form-select">Все</summary>
+            <div class="dropdown-menu p-2 w-100" style="max-height: 320px; overflow: auto;">
+              {% for g in groups %}
+                <label class="form-check">
+                  <input class="form-check-input" type="checkbox" name="group_id" value="{{ g.id }}" {% if g.id in filters.group_id %}checked{% endif %} />
+                  <span class="form-check-label">{{ g.name }}</span>
+                </label>
+              {% endfor %}
+            </div>
+          </details>
         </div>
         <div style="min-width: 200px;">
           <label class="form-label mb-0 small text-secondary">Исполнитель</label>
