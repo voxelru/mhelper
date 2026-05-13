@@ -285,7 +285,8 @@ FROM tasks
         groups = Group.query.order_by(Group.name.asc()).all()
 
         base_query = (
-            Task.query.filter(Task.status != "archived")
+            Task.query.options(joinedload(Task.group), joinedload(Task.comments))
+            .filter(Task.status != "archived")
             .order_by(Task.due_date.is_(None), Task.due_date.asc(), Task.id.desc())
         )
         if group_id is not None:

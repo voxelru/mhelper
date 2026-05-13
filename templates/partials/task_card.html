@@ -25,7 +25,11 @@
           </div>
         {% endif %}
       </div>
-      <div class="text-secondary small align-self-start">{{ t.comments|length }}</div>
+      <div class="text-secondary small align-self-start text-end text-nowrap lh-sm">
+        <div>Комментариев: {{ t.comments | length }}</div>
+        <div>Открыто: {{ t.comments | rejectattr("resolved") | list | length }}</div>
+        <div>Решено: {{ t.comments | selectattr("resolved") | list | length }}</div>
+      </div>
     </div>
   </div>
 </div>

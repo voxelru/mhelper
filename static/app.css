@@ -4,6 +4,38 @@
   gap: 16px;
 }
 
+/* сворачиваемые колонки доски */
+details.board-collapsible {
+  overflow: hidden;
+}
+
+details.board-collapsible > summary.board-collapsible-summary {
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+}
+
+details.board-collapsible > summary.board-collapsible-summary::-webkit-details-marker {
+  display: none;
+}
+
+details.board-collapsible:not([open]) > summary.board-collapsible-summary {
+  border-bottom: 0;
+  border-bottom-left-radius: var(--bs-card-inner-border-radius, var(--bs-border-radius));
+  border-bottom-right-radius: var(--bs-card-inner-border-radius, var(--bs-border-radius));
+}
+
+details.board-collapsible .board-collapsible-chevron::before {
+  content: "▾";
+  display: inline-block;
+  width: 1em;
+  text-align: center;
+}
+
+details.board-collapsible:not([open]) .board-collapsible-chevron::before {
+  content: "▸";
+}
+
 .task-list {
   min-height: 40px;
 }
