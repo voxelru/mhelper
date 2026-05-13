@@ -68,8 +68,32 @@ function initMultiFilterDropdowns() {
   }
 }
 
+function initCommentResolveCheckboxes() {
+  const boxes = Array.from(document.querySelectorAll(".comment-resolve-cb"));
+  if (boxes.length === 0) return;
+
+  for (const cb of boxes) {
+    cb.addEventListener("change", async () => {
+      const taskId = cb.dataset.taskId;
+      const commentId = cb.dataset.commentId;
+      const desired = cb.checked;
+      if (!taskId || !commentId) return;
+      cb.disabled = true;
+      try {
+        await postJson(`/api/tasks/${taskId}/comments/${commentId}/resolved`, { resolved: desired });
+      } catch (e) {
+        cb.checked = !desired;
+        alert("Не удалось сохранить. Обновите страницу и попробуйте снова.");
+      } finally {
+        cb.disabled = false;
+      }
+    });
+  }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   initDragDrop();
   initMultiFilterDropdowns();
+  initCommentResolveCheckboxes();
 });
 

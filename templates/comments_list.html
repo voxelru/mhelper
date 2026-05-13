@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+
+{% block content %}
+  {% set st_ru = {
+    'planned': 'Планируется',
+    'in_progress': 'В работе',
+    'done': 'Завершено',
+    'archived': 'Архив'
+  } %}
+
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <h1 class="h4 mb-0">Комментарии</h1>
+    <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('board') }}">← к доске</a>
+  </div>
+
+  <form class="card shadow-sm mb-4" method="get" action="{{ url_for('comments_list') }}">
+    <input type="hidden" name="sort" value="{{ list_sort }}" />
+    <input type="hidden" name="order" value="{{ list_order }}" />
+    <div class="card-body">
+      <div class="d-flex flex-nowrap gap-2 align-items-end overflow-auto">
+        <div style="min-width: 240px;">
+          <label class="form-label mb-0 small text-secondary">Название</label>
+          <input class="form-control" name="q" value="{{ filters.q | e }}" placeholder="Поиск по названию" />
+        </div>
+        <div style="min-width: 170px;">
+          <label class="form-label mb-0 small text-secondary">Статус</label>
+          <details class="dropdown w-100 multi-filter" data-multi-filter data-label="Статус">
+            <summary class="form-select">Все</summary>
+            <div class="dropdown-menu p-2 w-100">
+              <label class="form-check">
+                <input class="form-check-input" type="checkbox" name="status" value="planned" {% if 'planned' in filters.status %}checked{% endif %} />
+                <span class="form-check-label">Планируется</span>
+              </label>
+              <label class="form-check">
+                <input class="form-check-input" type="checkbox" name="status" value="in_progress" {% if 'in_progress' in filters.status %}checked{% endif %} />
+                <span class="form-check-label">В работе</span>
+              </label>
+              <label class="form-check">
+                <input class="form-check-input" type="checkbox" name="status" value="done" {% if 'done' in filters.status %}checked{% endif %} />
+                <span class="form-check-label">Завершено</span>
+              </label>
+              <label class="form-check">
+                <input class="form-check-input" type="checkbox" name="status" value="archived" {% if 'archived' in filters.status %}checked{% endif %} />
+                <span class="form-check-label">Архив</span>
+              </label>
+            </div>
+          </details>
+        </div>
+        <div style="min-width: 140px;">
+          <label class="form-label mb-0 small text-secondary">Приоритет</label>
+          <details class="dropdown w-100 multi-filter" data-multi-filter data-label="Приоритет">
+            <summary class="form-select">Все</summary>
+            <div class="dropdown-menu p-2 w-100">
+              <label class="form-check">
+                <input class="form-check-input" type="checkbox" name="priority" value="0" {% if 0 in filters.priority %}checked{% endif %} />
+                <span class="form-check-label">Pr0</span>
+              </label>
+              <label class="form-check">
+                <input class="form-check-input" type="checkbox" name="priority" value="1" {% if 1 in filters.priority %}checked{% endif %} />
+                <span class="form-check-label">Pr1</span>
+              </label>
+              <label class="form-check">
+                <input class="form-check-input" type="checkbox" name="priority" value="2" {% if 2 in filters.priority %}checked{% endif %} />
+                <span class="form-check-label">Pr2</span>
+              </label>
+              <label class="form-check">
+                <input class="form-check-input" type="checkbox" name="priority" value="3" {% if 3 in filters.priority %}checked{% endif %} />
+                <span class="form-check-label">Pr3</span>
+              </label>
+              <label class="form-check">
+                <input class="form-check-input" type="checkbox" name="priority" value="4" {% if 4 in filters.priority %}checked{% endif %} />
+                <span class="form-check-label">Pr4</span>
+              </label>
+            </div>
+          </details>
+        </div>
+        <div style="min-width: 200px;">
+          <label class="form-label mb-0 small text-secondary">Группа</label>
+          <details class="dropdown w-100 multi-filter" data-multi-filter data-label="Группа">
+            <summary class="form-select">Все</summary>
+            <div class="dropdown-menu p-2 w-100" style="max-height: 320px; overflow: auto;">
+              {% for g in groups %}
+                <label class="form-check">
+                  <input class="form-check-input" type="checkbox" name="group_id" value="{{ g.id }}" {% if g.id in filters.group_id %}checked{% endif %} />
+                  <span class="form-check-label">{{ g.name }}</span>
+                </label>
+              {% endfor %}
+            </div>
+          </details>
+        </div>
+        <div style="min-width: 200px;">
+          <label class="form-label mb-0 small text-secondary">Исполнитель</label>
+          <input class="form-control" name="assignee" value="{{ filters.assignee | e }}" placeholder="Часть имени" />
+        </div>
+        <div style="min-width: 150px;">
+          <label class="form-label mb-0 small text-secondary">Срок от</label>
+          <input class="form-control" type="date" name="due_from" value="{{ filters.due_from | e }}" />
+        </div>
+        <div style="min-width: 150px;">
+          <label class="form-label mb-0 small text-secondary">Срок до</label>
+          <input class="form-control" type="date" name="due_to" value="{{ filters.due_to | e }}" />
+        </div>
+        <div class="d-flex gap-2" style="min-width: 250px;">
+          <button class="btn btn-primary" type="submit">Фильтровать</button>
+          <a class="btn btn-outline-secondary" href="{{ url_for('comments_list') }}">Сбросить</a>
+        </div>
+      </div>
+    </div>
+  </form>
+
+  <div class="table-responsive card shadow-sm">
+    <table class="table table-hover mb-0 align-middle">
+      <thead class="table-light">
+        <tr>
+          <th scope="col" class="text-center" style="width: 3rem" title="Отметить комментарий выполненным">✓</th>
+          <th scope="col" style="width: 4rem">
+            <a class="text-decoration-none text-dark" href="{{ sort_links.id }}">#{% if list_sort == 'id' %} {% if list_order == 'asc' %}↑{% else %}↓{% endif %}{% endif %}</a>
+          </th>
+          <th scope="col" style="width: 6rem" class="text-nowrap">
+            <a class="text-decoration-none text-dark" href="{{ sort_links.priority }}">Приор.{% if list_sort == 'priority' %} {% if list_order == 'asc' %}↑{% else %}↓{% endif %}{% endif %}</a>
+          </th>
+          <th scope="col">
+            <a class="text-decoration-none text-dark" href="{{ sort_links.title }}">Название{% if list_sort == 'title' %} {% if list_order == 'asc' %}↑{% else %}↓{% endif %}{% endif %}</a>
+          </th>
+          <th scope="col" class="text-nowrap">
+            <a class="text-decoration-none text-dark" href="{{ sort_links.status }}">Статус{% if list_sort == 'status' %} {% if list_order == 'asc' %}↑{% else %}↓{% endif %}{% endif %}</a>
+          </th>
+          <th scope="col">
+            <a class="text-decoration-none text-dark" href="{{ sort_links.group }}">Группа{% if list_sort == 'group' %} {% if list_order == 'asc' %}↑{% else %}↓{% endif %}{% endif %}</a>
+          </th>
+          <th scope="col">
+            <a class="text-decoration-none text-dark" href="{{ sort_links.assignee }}">Исполнитель{% if list_sort == 'assignee' %} {% if list_order == 'asc' %}↑{% else %}↓{% endif %}{% endif %}</a>
+          </th>
+          <th scope="col" class="text-nowrap">
+            <a class="text-decoration-none text-dark" href="{{ sort_links.due_date }}">Срок{% if list_sort == 'due_date' %} {% if list_order == 'asc' %}↑{% else %}↓{% endif %}{% endif %}</a>
+          </th>
+          <th scope="col">Комментарий</th>
+          <th scope="col" class="text-end">Действия</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in comments %}
+          {% set t = c.task %}
+          {% set tip = c.body | replace('\n', ' ') | e %}
+          <tr class="task-priority-{{ t.priority }}">
+            <td class="text-center">
+              <input
+                type="checkbox"
+                class="form-check-input comment-resolve-cb m-0"
+                data-task-id="{{ t.id }}"
+                data-comment-id="{{ c.id }}"
+                aria-label="Отметить комментарий выполненным"
+              />
+            </td>
+            <td class="text-secondary small">{{ t.id }}</td>
+            <td class="text-secondary small text-nowrap">
+              {% if t.priority is not none %}
+                <span class="badge text-bg-light border task-priority-{{ t.priority }}">Pr{{ t.priority }}</span>
+              {% else %}
+                —
+              {% endif %}
+            </td>
+            <td>
+              <a class="fw-semibold text-decoration-none" href="{{ url_for('task_detail', task_id=t.id) }}">{{ t.title }}</a>
+              {% if t.link %}
+                <div class="small text-truncate" style="max-width: 20rem">
+                  <a href="{{ t.link }}" target="_blank" rel="noopener noreferrer">{{ t.link }}</a>
+                </div>
+              {% endif %}
+            </td>
+            <td>{{ st_ru.get(t.status, t.status) }}</td>
+            <td>{{ t.group.name if t.group else "—" }}</td>
+            <td>{{ t.assignee or "—" }}</td>
+            <td class="text-nowrap">{{ t.due_date.isoformat() if t.due_date else "—" }}</td>
+            <td class="small min-w-0" style="max-width: 28rem">
+              <div class="text-secondary">{{ c.created_at.strftime("%Y-%m-%d %H:%M") }}</div>
+              <div class="text-truncate" title="{{ tip }}">{{ c.body }}</div>
+            </td>
+            <td class="text-end text-nowrap">
+              <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('task_detail', task_id=t.id) }}">Открыть</a>
+              <a class="btn btn-sm btn-outline-primary" href="{{ url_for('task_edit', task_id=t.id) }}">Правка</a>
+            </td>
+          </tr>
+        {% else %}
+          <tr>
+            <td colspan="10" class="text-secondary text-center py-4">
+              {% if empty_all_open %}
+                Нет открытых комментариев.
+              {% else %}
+                Нет комментариев по выбранным условиям.
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endblock %}

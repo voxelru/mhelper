@@ -111,6 +111,112 @@ def _parse_task_form(form: Any) -> tuple[str | None, dict[str, Any]]:
     }
 
 
+def _parse_tasks_table_request(req: Any) -> dict[str, Any]:
+    """Shared query/sort params for /tasks and /comments list views."""
+    q = (req.args.get("q") or "").strip()
+    status_fs = [s.strip() for s in req.args.getlist("status") if (s or "").strip()]
+    status_fs = [s for s in status_fs if s in ("planned", "in_progress", "done", "archived")]
+
+    priority_fs_raw = req.args.getlist("priority")
+    priority_fs: list[int] = []
+    for p in priority_fs_raw:
+        try:
+            pi = int(str(p).strip())
+        except (TypeError, ValueError):
+            continue
+        if pi in (0, 1, 2, 3, 4):
+            priority_fs.append(pi)
+    priority_fs = sorted(set(priority_fs))
+
+    group_id_fs_raw = req.args.getlist("group_id")
+    group_id_fs: list[int] = []
+    for g in group_id_fs_raw:
+        try:
+            gi = int(str(g).strip())
+        except (TypeError, ValueError):
+            continue
+        if gi > 0:
+            group_id_fs.append(gi)
+    group_id_fs = sorted(set(group_id_fs))
+    assignee_f = (req.args.get("assignee") or "").strip()
+    due_from = _parse_optional_date(req.args.get("due_from"))
+    due_to = _parse_optional_date(req.args.get("due_to"))
+
+    sort = (req.args.get("sort") or "id").strip()
+    order = (req.args.get("order") or "desc").strip().lower()
+    if sort not in ("id", "title", "status", "priority", "group", "assignee", "due_date"):
+        sort = "id"
+    if order not in ("asc", "desc"):
+        order = "desc"
+
+    return {
+        "q": q,
+        "status_fs": status_fs,
+        "priority_fs": priority_fs,
+        "group_id_fs": group_id_fs,
+        "assignee_f": assignee_f,
+        "due_from": due_from,
+        "due_to": due_to,
+        "due_from_raw": req.args.get("due_from") or "",
+        "due_to_raw": req.args.get("due_to") or "",
+        "sort": sort,
+        "order": order,
+    }
+
+
+def _apply_task_row_filters(query: Any, fp: dict[str, Any]) -> Any:
+    if fp["q"]:
+        query = query.filter(Task.title.ilike(f"%{fp['q']}%"))
+    if fp["status_fs"]:
+        query = query.filter(Task.status.in_(fp["status_fs"]))
+    if fp["priority_fs"]:
+        query = query.filter(Task.priority.in_(fp["priority_fs"]))
+    if fp["group_id_fs"]:
+        query = query.filter(Task.group_id.in_(fp["group_id_fs"]))
+    if fp["assignee_f"]:
+        query = query.filter(Task.assignee.ilike(f"%{fp['assignee_f']}%"))
+    if fp["due_from"] is not None:
+        query = query.filter(Task.due_date.isnot(None), Task.due_date >= fp["due_from"])
+    if fp["due_to"] is not None:
+        query = query.filter(Task.due_date.isnot(None), Task.due_date <= fp["due_to"])
+    return query
+
+
+def _tasks_table_sort_column(sort: str) -> Any:
+    if sort == "group":
+        return Group.name
+    if sort == "priority":
+        return Task.priority
+    if sort == "id":
+        return Task.id
+    if sort == "title":
+        return Task.title
+    if sort == "status":
+        return Task.status
+    if sort == "assignee":
+        return Task.assignee
+    return Task.due_date
+
+
+def _filter_url_args(fp: dict[str, Any]) -> dict[str, Any]:
+    out: dict[str, Any] = {}
+    if fp["q"]:
+        out["q"] = fp["q"]
+    if fp["status_fs"]:
+        out["status"] = fp["status_fs"]
+    if fp["priority_fs"]:
+        out["priority"] = fp["priority_fs"]
+    if fp["group_id_fs"]:
+        out["group_id"] = fp["group_id_fs"]
+    if fp["assignee_f"]:
+        out["assignee"] = fp["assignee_f"]
+    if fp["due_from_raw"]:
+        out["due_from"] = fp["due_from_raw"]
+    if fp["due_to_raw"]:
+        out["due_to"] = fp["due_to_raw"]
+    return out
+
+
 def create_app() -> Flask:
     app = Flask(__name__)
     app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///mhelper.sqlite3"
@@ -233,41 +339,8 @@ FROM tasks
 
     @app.get("/tasks")
     def tasks_list():
-        q = (request.args.get("q") or "").strip()
-        status_fs = [s.strip() for s in request.args.getlist("status") if (s or "").strip()]
-        status_fs = [s for s in status_fs if s in ("planned", "in_progress", "done", "archived")]
-
-        priority_fs_raw = request.args.getlist("priority")
-        priority_fs: list[int] = []
-        for p in priority_fs_raw:
-            try:
-                pi = int(str(p).strip())
-            except (TypeError, ValueError):
-                continue
-            if pi in (0, 1, 2, 3, 4):
-                priority_fs.append(pi)
-        priority_fs = sorted(set(priority_fs))
-
-        group_id_fs_raw = request.args.getlist("group_id")
-        group_id_fs: list[int] = []
-        for g in group_id_fs_raw:
-            try:
-                gi = int(str(g).strip())
-            except (TypeError, ValueError):
-                continue
-            if gi > 0:
-                group_id_fs.append(gi)
-        group_id_fs = sorted(set(group_id_fs))
-        assignee_f = (request.args.get("assignee") or "").strip()
-        due_from = _parse_optional_date(request.args.get("due_from"))
-        due_to = _parse_optional_date(request.args.get("due_to"))
-
-        sort = (request.args.get("sort") or "id").strip()
-        order = (request.args.get("order") or "desc").strip().lower()
-        if sort not in ("id", "title", "status", "priority", "group", "assignee", "due_date"):
-            sort = "id"
-        if order not in ("asc", "desc"):
-            order = "desc"
+        fp = _parse_tasks_table_request(request)
+        sort, order = fp["sort"], fp["order"]
 
         last_comment_ranked = (
             db.session.query(
@@ -300,36 +373,8 @@ FROM tasks
             )
         )
 
-        if q:
-            query = query.filter(Task.title.ilike(f"%{q}%"))
-        if status_fs:
-            query = query.filter(Task.status.in_(status_fs))
-        if priority_fs:
-            query = query.filter(Task.priority.in_(priority_fs))
-        if group_id_fs:
-            query = query.filter(Task.group_id.in_(group_id_fs))
-        if assignee_f:
-            query = query.filter(Task.assignee.ilike(f"%{assignee_f}%"))
-        if due_from is not None:
-            query = query.filter(Task.due_date.isnot(None), Task.due_date >= due_from)
-        if due_to is not None:
-            query = query.filter(Task.due_date.isnot(None), Task.due_date <= due_to)
-
-        sort_col: Any
-        if sort == "group":
-            sort_col = Group.name
-        elif sort == "priority":
-            sort_col = Task.priority
-        elif sort == "id":
-            sort_col = Task.id
-        elif sort == "title":
-            sort_col = Task.title
-        elif sort == "status":
-            sort_col = Task.status
-        elif sort == "assignee":
-            sort_col = Task.assignee
-        else:
-            sort_col = Task.due_date
+        query = _apply_task_row_filters(query, fp)
+        sort_col = _tasks_table_sort_column(sort)
 
         if order == "asc":
             query = query.order_by(sort_col.asc(), Task.id.asc())
@@ -343,21 +388,7 @@ FROM tasks
         ]
         groups = Group.query.order_by(Group.name.asc()).all()
 
-        filter_args: dict[str, Any] = {}
-        if q:
-            filter_args["q"] = q
-        if status_fs:
-            filter_args["status"] = status_fs
-        if priority_fs:
-            filter_args["priority"] = priority_fs
-        if group_id_fs:
-            filter_args["group_id"] = group_id_fs
-        if assignee_f:
-            filter_args["assignee"] = assignee_f
-        if request.args.get("due_from"):
-            filter_args["due_from"] = request.args.get("due_from")
-        if request.args.get("due_to"):
-            filter_args["due_to"] = request.args.get("due_to")
+        filter_args = _filter_url_args(fp)
 
         sort_links: dict[str, str] = {}
         for field in ("id", "priority", "title", "status", "group", "assignee", "due_date"):
@@ -369,17 +400,73 @@ FROM tasks
             tasks=tasks,
             groups=groups,
             filters={
-                "q": q,
-                "status": status_fs,
-                "priority": priority_fs,
-                "group_id": group_id_fs,
-                "assignee": assignee_f,
-                "due_from": request.args.get("due_from") or "",
-                "due_to": request.args.get("due_to") or "",
+                "q": fp["q"],
+                "status": fp["status_fs"],
+                "priority": fp["priority_fs"],
+                "group_id": fp["group_id_fs"],
+                "assignee": fp["assignee_f"],
+                "due_from": fp["due_from_raw"],
+                "due_to": fp["due_to_raw"],
             },
             list_sort=sort,
             list_order=order,
             sort_links=sort_links,
+        )
+
+    @app.get("/comments")
+    def comments_list():
+        fp = _parse_tasks_table_request(request)
+        sort, order = fp["sort"], fp["order"]
+
+        global_open = (
+            db.session.query(func.count(Comment.id))
+            .join(Task, Comment.task_id == Task.id)
+            .filter(Comment.resolved.is_(False), Task.status != "archived")
+            .scalar()
+            or 0
+        )
+
+        query = (
+            Comment.query.options(joinedload(Comment.task).joinedload(Task.group))
+            .join(Task, Comment.task_id == Task.id)
+            .outerjoin(Group, Task.group_id == Group.id)
+            .filter(Comment.resolved.is_(False), Task.status != "archived")
+        )
+        query = _apply_task_row_filters(query, fp)
+        sort_col = _tasks_table_sort_column(sort)
+        if order == "asc":
+            query = query.order_by(sort_col.asc(), Task.id.asc(), Comment.created_at.desc())
+        else:
+            query = query.order_by(sort_col.desc(), Task.id.desc(), Comment.created_at.desc())
+
+        rows = query.all()
+        groups = Group.query.order_by(Group.name.asc()).all()
+        filter_args = _filter_url_args(fp)
+
+        sort_links: dict[str, str] = {}
+        for field in ("id", "priority", "title", "status", "group", "assignee", "due_date"):
+            next_order = "desc" if sort == field and order == "asc" else "asc"
+            sort_links[field] = url_for("comments_list", **filter_args, sort=field, order=next_order)
+
+        empty_all_open = len(rows) == 0 and global_open == 0
+
+        return render_template(
+            "comments_list.html",
+            comments=rows,
+            groups=groups,
+            filters={
+                "q": fp["q"],
+                "status": fp["status_fs"],
+                "priority": fp["priority_fs"],
+                "group_id": fp["group_id_fs"],
+                "assignee": fp["assignee_f"],
+                "due_from": fp["due_from_raw"],
+                "due_to": fp["due_to_raw"],
+            },
+            list_sort=sort,
+            list_order=order,
+            sort_links=sort_links,
+            empty_all_open=empty_all_open,
         )
 
     @app.get("/tasks/<int:task_id>")
@@ -463,6 +550,21 @@ FROM tasks
             return jsonify({"ok": False, "error": "Not found"}), 404
 
         task.status = status
+        db.session.commit()
+        return jsonify({"ok": True})
+
+    @app.post("/api/tasks/<int:task_id>/comments/<int:comment_id>/resolved")
+    def api_comment_resolved(task_id: int, comment_id: int):
+        comment = Comment.query.filter_by(id=comment_id, task_id=task_id).first()
+        if comment is None:
+            return jsonify({"ok": False, "error": "Not found"}), 404
+
+        payload = request.get_json(silent=True) or {}
+        resolved = payload.get("resolved")
+        if not isinstance(resolved, bool):
+            return jsonify({"ok": False, "error": "Body must be JSON with boolean \"resolved\""}), 400
+
+        comment.resolved = resolved
         db.session.commit()
         return jsonify({"ok": True})
 
