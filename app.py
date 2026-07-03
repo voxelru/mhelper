@@ -5,7 +5,7 @@ from typing import Any, Literal
 
 from flask import Flask, abort, jsonify, redirect, render_template, request, url_for
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import CheckConstraint, func, text
+from sqlalchemy import CheckConstraint, func, or_, text
 from sqlalchemy.orm import joinedload
 
 
@@ -42,7 +42,7 @@ class Task(db.Model):
         "Comment",
         back_populates="task",
         cascade="all,delete-orphan",
-        order_by="Comment.created_at.asc()",
+        order_by="Comment.created_at.desc()",
     )
 
     __table_args__ = (
@@ -130,12 +130,15 @@ def _parse_tasks_table_request(req: Any) -> dict[str, Any]:
 
     group_id_fs_raw = req.args.getlist("group_id")
     group_id_fs: list[int] = []
+    group_no = False
     for g in group_id_fs_raw:
         try:
             gi = int(str(g).strip())
         except (TypeError, ValueError):
             continue
-        if gi > 0:
+        if gi == 0:
+            group_no = True
+        elif gi > 0:
             group_id_fs.append(gi)
     group_id_fs = sorted(set(group_id_fs))
     assignee_f = (req.args.get("assignee") or "").strip()
@@ -154,6 +157,7 @@ def _parse_tasks_table_request(req: Any) -> dict[str, Any]:
         "status_fs": status_fs,
         "priority_fs": priority_fs,
         "group_id_fs": group_id_fs,
+        "group_no": group_no,
         "assignee_f": assignee_f,
         "due_from": due_from,
         "due_to": due_to,
@@ -171,8 +175,13 @@ def _apply_task_row_filters(query: Any, fp: dict[str, Any]) -> Any:
         query = query.filter(Task.status.in_(fp["status_fs"]))
     if fp["priority_fs"]:
         query = query.filter(Task.priority.in_(fp["priority_fs"]))
-    if fp["group_id_fs"]:
-        query = query.filter(Task.group_id.in_(fp["group_id_fs"]))
+    if fp["group_id_fs"] or fp["group_no"]:
+        group_conditions = []
+        if fp["group_id_fs"]:
+            group_conditions.append(Task.group_id.in_(fp["group_id_fs"]))
+        if fp["group_no"]:
+            group_conditions.append(Task.group_id.is_(None))
+        query = query.filter(or_(*group_conditions))
     if fp["assignee_f"]:
         query = query.filter(Task.assignee.ilike(f"%{fp['assignee_f']}%"))
     if fp["due_from"] is not None:
@@ -206,8 +215,11 @@ def _filter_url_args(fp: dict[str, Any]) -> dict[str, Any]:
         out["status"] = fp["status_fs"]
     if fp["priority_fs"]:
         out["priority"] = fp["priority_fs"]
-    if fp["group_id_fs"]:
-        out["group_id"] = fp["group_id_fs"]
+    if fp["group_id_fs"] or fp["group_no"]:
+        group_ids = list(fp["group_id_fs"])
+        if fp["group_no"]:
+            group_ids.append(0)
+        out["group_id"] = sorted(set(group_ids))
     if fp["assignee_f"]:
         out["assignee"] = fp["assignee_f"]
     if fp["due_from_raw"]:
@@ -290,7 +302,10 @@ FROM tasks
             .order_by(Task.due_date.is_(None), Task.due_date.asc(), Task.id.desc())
         )
         if group_id is not None:
-            base_query = base_query.filter(Task.group_id == group_id)
+            if group_id == 0:
+                base_query = base_query.filter(Task.group_id.is_(None))
+            else:
+                base_query = base_query.filter(Task.group_id == group_id)
 
         tasks = base_query.all()
         buckets: dict[str, list[Task]] = {"planned": [], "in_progress": [], "done": []}
@@ -405,6 +420,7 @@ FROM tasks
                 "status": fp["status_fs"],
                 "priority": fp["priority_fs"],
                 "group_id": fp["group_id_fs"],
+                "group_no": fp["group_no"],
                 "assignee": fp["assignee_f"],
                 "due_from": fp["due_from_raw"],
                 "due_to": fp["due_to_raw"],
@@ -460,6 +476,7 @@ FROM tasks
                 "status": fp["status_fs"],
                 "priority": fp["priority_fs"],
                 "group_id": fp["group_id_fs"],
+                "group_no": fp["group_no"],
                 "assignee": fp["assignee_f"],
                 "due_from": fp["due_from_raw"],
                 "due_to": fp["due_to_raw"],

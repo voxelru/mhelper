@@ -7,6 +7,7 @@
         <label class="form-label mb-1">Группа</label>
         <select class="form-select" name="group_id" onchange="this.form.submit()">
           <option value="" {% if selected_group_id is none %}selected{% endif %}>Все</option>
+          <option value="0" {% if selected_group_id == 0 %}selected{% endif %}>Без группы</option>
           {% for g in groups %}
             <option value="{{ g.id }}" {% if selected_group_id == g.id %}selected{% endif %}>{{ g.name }}</option>
           {% endfor %}
