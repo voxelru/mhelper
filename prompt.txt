@@ -1,0 +1,273 @@
+Создай веб-приложение mhelper — простой таск-трекер на русском языке.
+
+================================================================================
+СТЕК И ЗАПУСК
+================================================================================
+
+- Python 3, Flask 3+, Flask-SQLAlchemy 3+
+- SQLite (файл mhelper.sqlite3 рядом с app.py)
+- Сервер разработки: app.run(debug=True, port=5001)
+- UI: Bootstrap 5.3 (CDN), SortableJS 1.15 (CDN) для drag&drop
+- Без авторизации, без Docker, без отдельных SQL-миграций
+- При старте приложения: db.create_all() + программные ALTER TABLE для совместимости со старыми БД (см. раздел «Миграции при старте»)
+
+Структура проекта:
+
+  app.py
+  requirements.txt          # Flask>=3.0.0, Flask-SQLAlchemy>=3.1.1
+  README.md
+  .gitignore                # .venv/, __pycache__/, *.sqlite3, .env
+  static/app.css
+  static/app.js
+  templates/base.html
+  templates/board.html
+  templates/tasks_list.html
+  templates/comments_list.html
+  templates/task.html
+  templates/task_edit.html
+  templates/partials/task_card.html
+
+================================================================================
+МОДЕЛЬ ДАННЫХ (SQLAlchemy)
+================================================================================
+
+Group (groups):
+  - id: Integer PK
+  - name: String(120), NOT NULL, UNIQUE
+  - tasks: relationship к Task
+
+Task (tasks):
+  - id: Integer PK
+  - title: String(240), NOT NULL
+  - description: Text, nullable
+  - link: String(2000), nullable
+  - assignee: String(120), nullable
+  - due_date: Date, nullable
+  - status: String(20), NOT NULL, default "planned"
+    CHECK: planned | in_progress | done | archived
+  - priority: Integer, NOT NULL, default 4
+    CHECK: 0 | 1 | 2 | 3 | 4  (0 = самый высокий)
+  - group_id: FK groups.id ON DELETE SET NULL, nullable
+  - comments: relationship, order_by Comment.created_at DESC (новые сверху)
+
+Comment (comments):
+  - id: Integer PK
+  - task_id: FK tasks.id ON DELETE CASCADE, NOT NULL, indexed
+  - created_at: DateTime, NOT NULL, default utcnow
+  - body: Text, NOT NULL
+  - resolved: Boolean, NOT NULL, default False
+
+================================================================================
+МИГРАЦИИ ПРИ СТАРТЕ (в create_app, после create_all)
+================================================================================
+
+Через PRAGMA table_info и raw SQL:
+
+1. Если в tasks нет priority — ADD COLUMN priority INTEGER NOT NULL DEFAULT 4
+2. Если в tasks нет description — ADD COLUMN description TEXT
+3. Если CHECK status не содержит 'archived' — пересоздать таблицу tasks через tasks__new с полным CHECK и INSERT…SELECT
+4. Если в comments нет resolved — ADD COLUMN resolved INTEGER NOT NULL DEFAULT 0
+
+================================================================================
+НАВИГАЦИЯ (navbar в base.html)
+================================================================================
+
+Бренд «mhelper» → доска. Три вкладки:
+  - Доска        → GET /
+  - Все задачи   → GET /tasks
+  - Комментарии  → GET /comments
+
+Общий layout: Bootstrap navbar, container max-width 90vw (app.css), фон bg-body-tertiary.
+
+================================================================================
+ВКЛАДКА «ДОСКА» (GET /)
+================================================================================
+
+Канбан из трёх вертикальных сворачиваемых секций (<details open>):
+  - Планируется   (status=planned)
+  - В работе      (status=in_progress)
+  - Завершено     (status=done)
+
+Задачи со status=archived на доске НЕ показываются.
+
+Сортировка задач внутри колонок: сначала с due_date (NULL в конце), по due_date ASC, затем id DESC.
+
+Фильтр по группе (GET-параметр group_id):
+  - пусто — все группы
+  - 0 — только задачи без группы (group_id IS NULL)
+  - N>0 — только задача группы N
+  - select с onchange submit; опции: «Все», «Без группы», список групп
+  - кнопка «Сбросить» если фильтр активен
+
+Форма создания группы (POST /groups): поле name, без дубликатов (case-insensitive).
+
+Форма быстрого создания задачи (POST /tasks):
+  - поля: title (required), link, assignee, due_date, group_id (select), priority (Pr4 default)
+  - новая задача всегда status=planned
+  - redirect обратно на доску с сохранением group_id фильтра
+
+Drag&drop (SortableJS):
+  - списки .task-list с data-status
+  - карточки .task-card с data-task-id
+  - group "tasks-board", draggable .task-card
+  - onAdd → POST /api/tasks/<id>/move JSON {"status": "planned"|"in_progress"|"done"}
+  - при ошибке alert + reload
+
+Карточка задачи (partial task_card.html):
+  - ссылка на /tasks/<id>
+  - badge приоритета (если не 4), badge группы, исполнитель, срок (просроченный — text-danger)
+  - ссылка на задачу
+  - справа: всего комментариев / открыто / решено
+  - CSS-класс task-priority-0..4 (цветная левая полоска и фон для 0–3)
+
+================================================================================
+ВКЛАДКА «ВСЕ ЗАДАЧИ» (GET /tasks)
+================================================================================
+
+Таблица ВСЕХ задач, включая archived.
+
+Фильтры (GET, сохраняются при сортировке через hidden sort/order):
+  - q — поиск по title (ILIKE %q%)
+  - status — мультивыбор: planned, in_progress, done, archived
+  - priority — мультивыбор 0–4
+  - group_id — мультивыбор; value=0 означает «Без группы» (group_id IS NULL); можно комбинировать с конкретными группами (OR)
+  - assignee — подстрока ILIKE
+  - due_from, due_to — диапазон due_date (только задачи с непустым due_date)
+  - кнопки «Фильтровать» и «Сбросить»
+
+Мультивыбор реализовать через <details class="multi-filter" data-multi-filter data-label="…"> с чекбоксами; JS обновляет текст summary («Группа: Pr0, Pr1 +2» и т.д.).
+
+Сортировка по клику на заголовок колонки:
+  - поля: id, priority, title, status, group (Group.name), assignee, due_date
+  - order asc/desc, default sort=id desc
+  - стрелка ↑/↓ у активной колонки
+
+Колонки таблицы: #, Приор., Название, Статус, Группа, Исполнитель, Срок, Последний комментарий, Действия.
+
+«Последний комментарий» — подзапрос row_number() OVER (PARTITION BY task_id ORDER BY created_at DESC), rn=1.
+
+Действия: «Открыть» → task detail, «Правка» → task edit.
+
+Статусы отображать по-русски: Планируется / В работе / Завершено / Архив.
+
+================================================================================
+ВКЛАДКА «КОММЕНТАРИИ» (GET /comments)
+================================================================================
+
+Таблица открытых комментариев: Comment.resolved=False И Task.status != archived.
+
+Те же фильтры и сортировка по полям задачи, что на /tasks.
+Дополнительно: order by Comment.created_at DESC как tie-breaker.
+
+Колонки: чекбокс ✓, # задачи, Приор., Название, Статус, Группа, Исполнитель, Срок, Комментарий (дата + текст truncate), Действия.
+
+Чекбокс «отметить выполненным»:
+  - POST /api/tasks/<task_id>/comments/<comment_id>/resolved JSON {"resolved": true|false}
+  - без перезагрузки страницы (fetch в app.js)
+
+Пустое состояние:
+  - если фильтры пустые и открытых комментариев нет вообще — «Нет открытых комментариев»
+  - иначе — «Нет комментариев по выбранным условиям»
+
+================================================================================
+КАРТОЧКА ЗАДАЧИ (GET /tasks/<id>)
+================================================================================
+
+Две колонки:
+  - «Поля»: приоритет (badge), группа, исполнитель, срок, ссылка, описание (pre-wrap)
+  - «Комментарии»: форма добавления (POST /tasks/<id>/comments), список комментариев новые сверху
+
+Каждый комментарий:
+  - дата/время
+  - чекбокс «решено» (POST update_comment с resolved_present + onchange submit)
+  - текст; если resolved — line-through, opacity 0.7
+  - <details> «Редактировать» → textarea + POST update_comment с body
+
+Кнопка «Редактировать» → /tasks/<id>/edit
+
+================================================================================
+РЕДАКТИРОВАНИЕ ЗАДАЧИ (GET/POST /tasks/<id>/edit)
+================================================================================
+
+Форма всех полей: title, status (включая archived), priority 0–4 с русскими подписями цветов, link, description, assignee, due_date, group_id (опция «— без группы —»).
+
+POST: валидация через _parse_task_form; при ошибке — re-render с edit_form и alert.
+Успех → redirect на task detail.
+
+Внизу read-only список комментариев с чекбоксом «решено» (без редактирования текста, как на edit-странице в текущей версии).
+
+================================================================================
+API
+================================================================================
+
+POST /api/tasks/<id>/move
+  Body: {"status": "planned"|"in_progress"|"done"}
+  Response: {"ok": true} или 400/404
+
+POST /api/tasks/<task_id>/comments/<comment_id>/resolved
+  Body: {"resolved": boolean}
+  Response: {"ok": true} или 400/404
+
+================================================================================
+ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ (app.py)
+================================================================================
+
+_parse_optional_date(iso string) → date | None
+
+_parse_task_form(form) → (error_msg | None, fields dict)
+  - title обязателен
+  - group_id <= 0 → None
+  - status только из allowed или None (для create)
+  - priority default 4
+
+_parse_tasks_table_request(request) → dict фильтров/сортировки (общий для /tasks и /comments)
+
+_apply_task_row_filters(query, fp) — применить фильтры к Task-запросу
+
+_tasks_table_sort_column(sort) → SQLAlchemy column
+
+_filter_url_args(fp) → dict для url_for (сохранение фильтров в sort links)
+
+================================================================================
+STATIC / JS (app.js)
+================================================================================
+
+- postJson(url, payload) — fetch POST application/json
+- initDragDrop() — Sortable на .task-list
+- initMultiFilterDropdowns() — summary text для data-multi-filter
+- initCommentResolveCheckboxes() — .comment-resolve-cb → API resolved
+
+================================================================================
+STATIC / CSS (app.css)
+================================================================================
+
+- .board-vertical — grid одна колонка
+- сворачиваемые секции доски с chevron ▸/▾
+- .task-list min-height, .task-card grab cursor, .task-ghost opacity
+- .app-container max-width 90vw
+- .task-priority-0..4 — цвета: 0 красный, 1 оранжевый, 2 жёлтый, 3 зелёный, 4 без полоски
+- details.multi-filter — dropdown через [open]
+
+================================================================================
+README
+================================================================================
+
+Краткая инструкция запуска (Windows PowerShell: venv, pip install, python app.py).
+URL: http://127.0.0.1:5001
+Описание вкладок: Доска, Все задачи, Комментарии, Карточка задачи, общие возможности.
+
+================================================================================
+ТРЕБОВАНИЯ К РЕАЛИЗАЦИИ
+================================================================================
+
+1. Весь интерфейс на русском языке.
+2. Код в одном app.py с create_app() factory pattern; app = create_app() в конце.
+3. Jinja2 шаблоны с extends base.html.
+4. Никаких тестов и лишних зависимостей.
+5. Рабочее приложение «из коробки» после pip install && python app.py.
+6. Приоритеты визуально различимы на доске и в таблицах (классы task-priority-N).
+7. Фильтр «Без группы» (group_id=0) на доске и в мультивыборе групп на /tasks и /comments.
+8. Комментарии на странице задачи — сортировка по дате убыванию.
+9. Не создавать отдельные .sql файлы миграций — только автоматические правки схемы при старте.
+
+Сгенерируй все файлы проекта полностью, готовые к запуску.
